@@ -17,7 +17,7 @@ func main() {
 	// from Grafana to create different instances of SlsDatasource (per datasource
 	// ID). When datasource configuration changed Dispose method will be called and
 	// new datasource instance created using NewSlsDatasource factory.
-	if err := datasource.Manage("myorgid-simple-backend-datasource", plugin.NewSlsDatasource, datasource.ManageOpts{}); err != nil {
+	if err := datasource.Manage("aliyun-sls-datasource", plugin.NewSlsDatasource, datasource.ManageOpts{}); err != nil {
 		log.DefaultLogger.Error(err.Error())
 		os.Exit(1)
 	}

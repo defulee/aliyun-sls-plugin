@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -30,15 +29,26 @@ var (
 const timeSeriesType = "time series"
 const tableType = "table"
 
-type DatasourceInstance struct {
+// SlsDatasource is an example datasource which can respond to data queries, reports
+// its health and has streaming skills.
+type SlsDatasource struct {
 	Client   *sls.Client
 	Settings *models.PluginSettings
 }
 
-func newDataSourceInstance(settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-	log.DefaultLogger.Info("newDataSourceInstance called", "Settings", settings)
+// NewSlsDatasource creates a new datasource instance.
+func NewSlsDatasource(settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
+
+	log.DefaultLogger.Info("NewSlsDatasource called")
 	pluginSettings, _ := models.LoadPluginSettings(settings)
-	return DatasourceInstance{
+	log.DefaultLogger.Info("NewSlsDatasource pluginSettings",
+		"AccessKeyId", pluginSettings.AccessKeyId,
+		"AccessKeySecret", pluginSettings.Secrets.AccessKeySecret,
+		"Endpoint", pluginSettings.Endpoint,
+		"Project", pluginSettings.Project,
+		"LogStore", pluginSettings.LogStore)
+
+	return &SlsDatasource{
 		Client: &sls.Client{
 			AccessKeyID:     pluginSettings.AccessKeyId,
 			AccessKeySecret: pluginSettings.Secrets.AccessKeySecret,
@@ -46,28 +56,6 @@ func newDataSourceInstance(settings backend.DataSourceInstanceSettings) (instanc
 		},
 		Settings: pluginSettings,
 	}, nil
-}
-
-// SlsDatasource is an example datasource which can respond to data queries, reports
-// its health and has streaming skills.
-type SlsDatasource struct {
-	InstanceManager instancemgmt.InstanceManager
-}
-
-// NewSlsDatasource creates a new datasource instance.
-func NewSlsDatasource(_ backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-	instanceManager := datasource.NewInstanceManager(newDataSourceInstance)
-	return &SlsDatasource{
-		InstanceManager: instanceManager,
-	}, nil
-}
-
-func (d *SlsDatasource) getInstance(ctx backend.PluginContext) (*DatasourceInstance, error) {
-	instance, err := d.InstanceManager.Get(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return instance.(*DatasourceInstance), nil
 }
 
 // Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
@@ -119,12 +107,10 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 		return response
 	}
 
-	instance, _ := d.getInstance(pCtx)
-
 	from := query.TimeRange.From.UnixMilli() / 1000
 	to := query.TimeRange.To.UnixMilli() / 1000
 
-	logsResp, err := instance.Client.GetLogs(instance.Settings.Project, instance.Settings.LogStore, "", from, to, qm.Query, 500, 0, false)
+	logsResp, err := d.Client.GetLogs(d.Settings.Project, d.Settings.LogStore, "", from, to, qm.Query, 500, 0, true)
 	if err != nil {
 		return backend.DataResponse{}
 	}
@@ -164,16 +150,16 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 func (d *SlsDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	log.DefaultLogger.Info("CheckHealth called", "request", req)
 
-	instance, _ := d.getInstance(req.PluginContext)
-
-	_, err := instance.Client.GetLogStore(instance.Settings.Project, instance.Settings.LogStore)
+	_, err := d.Client.GetLogStore(d.Settings.Project, d.Settings.LogStore)
 	if err != nil {
+		log.DefaultLogger.Info("CheckHealth failed", "error", err)
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
 			Message: "GetLogStore error",
 		}, nil
 	}
 
+	log.DefaultLogger.Info("CheckHealth success")
 	return &backend.CheckHealthResult{
 		Status:  backend.HealthStatusOk,
 		Message: "Data source is working",
