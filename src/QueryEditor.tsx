@@ -1,57 +1,50 @@
 import { defaults } from 'lodash';
 
-import React, { ChangeEvent, PureComponent, SyntheticEvent } from 'react';
-import { LegacyForms } from '@grafana/ui';
-import { QueryEditorProps } from '@grafana/data';
+import React, { ChangeEvent, PureComponent } from 'react';
+import { LegacyForms, Select } from '@grafana/ui';
+import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from './datasource';
-import { defaultQuery, MyQuery, SlsDataSourceOptions } from './types';
+import { defaultQuery, SlsQuery, SlsDataSourceOptions, Formatter } from './types';
 
-const { FormField, Switch } = LegacyForms;
+const { FormField } = LegacyForms;
 
-type Props = QueryEditorProps<DataSource, MyQuery, SlsDataSourceOptions>;
+type Props = QueryEditorProps<DataSource, SlsQuery, SlsDataSourceOptions>;
+
+const formatOptions = [
+  { label: 'TimeSeries', value: Formatter.TimeSeries, description: 'time series format' },
+  { label: 'Table', value: Formatter.Table, description: 'table format' },
+];
 
 export class QueryEditor extends PureComponent<Props> {
   onQueryTextChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { onChange, query } = this.props;
-    onChange({ ...query, queryText: event.target.value });
+    onChange({ ...query, query: event.target.value });
   };
 
-  onConstantChange = (event: ChangeEvent<HTMLInputElement>) => {
+  onFormatterChange = (event: SelectableValue<Formatter>) => {
     const { onChange, query, onRunQuery } = this.props;
-    onChange({ ...query, constant: parseFloat(event.target.value) });
-    // executes the query
-    onRunQuery();
-  };
-
-  onWithStreamingChange = (event: SyntheticEvent<HTMLInputElement>) => {
-    const { onChange, query, onRunQuery } = this.props;
-    onChange({ ...query, withStreaming: event.currentTarget.checked });
-    // executes the query
+    onChange({ ...query, format: event.value });
     onRunQuery();
   };
 
   render() {
     const query = defaults(this.props.query, defaultQuery);
-    const { queryText, constant, withStreaming } = query;
+    const { query: queryText, format: format } = query;
 
     return (
       <div className="gf-form">
-        <FormField
-          width={4}
-          value={constant}
-          onChange={this.onConstantChange}
-          label="Constant"
-          type="number"
-          step="0.1"
-        />
+
         <FormField
           labelWidth={8}
           value={queryText || ''}
           onChange={this.onQueryTextChange}
           label="Query Text"
-          tooltip="Not used yet"
+          tooltip="Aliyun sls query text"
         />
-        <Switch checked={withStreaming || false} label="Enable streaming (v8+)" onChange={this.onWithStreamingChange} />
+
+        <div className="gf-form">
+          <Select menuShouldPortal options={formatOptions} value={format} onChange={this.onFormatterChange} />
+        </div>
       </div>
     );
   }

@@ -38,7 +38,6 @@ type SlsDatasource struct {
 
 // NewSlsDatasource creates a new datasource instance.
 func NewSlsDatasource(settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
-
 	log.DefaultLogger.Info("NewSlsDatasource called")
 	pluginSettings, _ := models.LoadPluginSettings(settings)
 	log.DefaultLogger.Info("NewSlsDatasource pluginSettings",
@@ -90,7 +89,7 @@ func (d *SlsDatasource) QueryData(ctx context.Context, req *backend.QueryDataReq
 type queryModel struct {
 	From       int64  `json:"from"`
 	To         int64  `json:"to"`
-	Query      string `json:"queryExp"`
+	Query      string `json:"query"`
 	MaxLineNum int64  `json:"maxLineNum"`
 	Offset     int64  `json:"offset"`
 	Reverse    bool   `json:"reverse"`

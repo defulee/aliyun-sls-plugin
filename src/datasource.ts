@@ -1,8 +1,8 @@
 import { DataSourceInstanceSettings } from '@grafana/data';
 import { DataSourceWithBackend } from '@grafana/runtime';
-import { SlsDataSourceOptions, MyQuery } from './types';
+import { SlsDataSourceOptions, SlsQuery } from './types';
 
-export class DataSource extends DataSourceWithBackend<MyQuery, SlsDataSourceOptions> {
+export class DataSource extends DataSourceWithBackend<SlsQuery, SlsDataSourceOptions> {
   constructor(instanceSettings: DataSourceInstanceSettings<SlsDataSourceOptions>) {
     super(instanceSettings);
   }
