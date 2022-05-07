@@ -6,14 +6,13 @@ export enum Formatter {
 }
 
 export interface SlsQuery extends DataQuery {
-  query?: string;
+  queryText?: string;
   format?: Formatter;
 }
 
 export const defaultQuery: Partial<SlsQuery> = {
   format: Formatter.TimeSeries,
 };
-
 
 /**
  * These are options configured for each DataSource instance.

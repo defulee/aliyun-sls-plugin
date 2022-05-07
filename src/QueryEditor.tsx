@@ -1,27 +1,29 @@
 import { defaults } from 'lodash';
 
-import React, { ChangeEvent, PureComponent } from 'react';
-import { LegacyForms, Select } from '@grafana/ui';
+import React, { PureComponent } from 'react';
+import { Label, InlineFieldRow, InlineField, Select, CodeEditor } from '@grafana/ui';
+
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from './datasource';
 import { defaultQuery, SlsQuery, SlsDataSourceOptions, Formatter } from './types';
 
-const { FormField } = LegacyForms;
+// const { FormField } = LegacyForms;
 
 type Props = QueryEditorProps<DataSource, SlsQuery, SlsDataSourceOptions>;
 
 const formatOptions = [
-  { label: 'TimeSeries', value: Formatter.TimeSeries, description: 'time series format' },
-  { label: 'Table', value: Formatter.Table, description: 'table format' },
+  { label: 'TimeSeries', value: Formatter.TimeSeries },
+  { label: 'Table', value: Formatter.Table },
 ];
 
 export class QueryEditor extends PureComponent<Props> {
-  onQueryTextChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const { onChange, query } = this.props;
-    onChange({ ...query, query: event.target.value });
+  onQueryTextChange = (value: string) => {
+    const { onChange, query, onRunQuery } = this.props;
+    onChange({ ...query, queryText: value });
+    onRunQuery();
   };
 
-  onFormatterChange = (event: SelectableValue<Formatter>) => {
+  onFormatChange = (event: SelectableValue<Formatter>) => {
     const { onChange, query, onRunQuery } = this.props;
     onChange({ ...query, format: event.value });
     onRunQuery();
@@ -29,23 +31,32 @@ export class QueryEditor extends PureComponent<Props> {
 
   render() {
     const query = defaults(this.props.query, defaultQuery);
-    const { query: queryText, format: format } = query;
 
     return (
-      <div className="gf-form">
+      <>
+        <div style={{ width: '100%' }}>
+          <Label className="width-12">
+            Query Text:
+          </Label>
 
-        <FormField
-          labelWidth={8}
-          value={queryText || ''}
-          onChange={this.onQueryTextChange}
-          label="Query Text"
-          tooltip="Aliyun sls query text"
-        />
-
-        <div className="gf-form">
-          <Select menuShouldPortal options={formatOptions} value={format} onChange={this.onFormatterChange} />
+          <CodeEditor
+            language="json"
+            showLineNumbers={true}
+            value={query.queryText || ''}
+            width="100%"
+            height="200px"
+            onBlur={this.onQueryTextChange}
+          />
         </div>
-      </div>
+        <br />
+        <div className="gf-form">
+          <InlineFieldRow>
+            <InlineField label="Format" grow>
+              <Select options={formatOptions} onChange={this.onFormatChange} value={query.format} />
+            </InlineField>
+          </InlineFieldRow>
+        </div>
+      </>
     );
   }
 }
