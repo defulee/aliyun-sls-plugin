@@ -34,6 +34,7 @@ const tableType = "table"
 type SlsDatasource struct {
 	Client   *sls.Client
 	Settings *models.PluginSettings
+	log      log.Logger
 }
 
 // NewSlsDatasource creates a new datasource instance.
@@ -54,6 +55,7 @@ func NewSlsDatasource(settings backend.DataSourceInstanceSettings) (instancemgmt
 			Endpoint:        pluginSettings.Endpoint,
 		},
 		Settings: pluginSettings,
+		log:      log.DefaultLogger,
 	}, nil
 }
 
@@ -62,6 +64,10 @@ func NewSlsDatasource(settings backend.DataSourceInstanceSettings) (instancemgmt
 // be disposed and a new one will be created using NewSlsDatasource factory function.
 func (d *SlsDatasource) Dispose() {
 	// Clean up datasource instance resources.
+	err := d.Client.Close()
+	if err != nil {
+		return
+	}
 }
 
 // QueryData handles multiple queries and returns multiple responses.
@@ -69,7 +75,7 @@ func (d *SlsDatasource) Dispose() {
 // The QueryDataResponse contains a map of RefID to the response for each query, and each response
 // contains Frames ([]*Frame).
 func (d *SlsDatasource) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
-	log.DefaultLogger.Info("QueryData called", "request", req)
+	d.log.Info("QueryData called", "request", req)
 
 	// create response struct
 	response := backend.NewQueryDataResponse()
@@ -86,40 +92,32 @@ func (d *SlsDatasource) QueryData(ctx context.Context, req *backend.QueryDataReq
 	return response, nil
 }
 
-type queryModel struct {
-	From       int64  `json:"from"`
-	To         int64  `json:"to"`
-	Query      string `json:"query"`
-	MaxLineNum int64  `json:"maxLineNum"`
-	Offset     int64  `json:"offset"`
-	Reverse    bool   `json:"reverse"`
-}
-
 func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	d.log.Info("query params: ", query.JSON)
 	response := backend.DataResponse{}
 
 	// Unmarshal the JSON into our queryModel.
-	var qm queryModel
+	var payload models.QueryPayload
 
-	response.Error = json.Unmarshal(query.JSON, &qm)
+	response.Error = json.Unmarshal(query.JSON, &payload)
 	if response.Error != nil {
 		return response
 	}
 
-	from := query.TimeRange.From.UnixMilli() / 1000
-	to := query.TimeRange.To.UnixMilli() / 1000
+	payload.From = query.TimeRange.From.UnixMilli() / 1000
+	payload.To = query.TimeRange.To.UnixMilli() / 1000
+	payload.MaxDataPoints = query.MaxDataPoints
+	d.log.Info("query", "payload.Query", payload.Query, "format", payload.Format, "from", payload.From, "to", payload.To, "MaxDataPoints", payload.MaxDataPoints)
 
-	logsResp, err := d.Client.GetLogs(d.Settings.Project, d.Settings.LogStore, "", from, to, qm.Query, 500, 0, true)
+	logsResp, err := d.Client.GetLogs(d.Settings.Project, d.Settings.LogStore, "", payload.From, payload.To, payload.Query, payload.MaxDataPoints, 0, true)
 	if err != nil {
-		return backend.DataResponse{}
-	}
-	if err != nil {
-		log.DefaultLogger.Error("GetLogs ", "query : ", qm.Query, "error ", err)
+		d.log.Error("GetLogs ", "query", payload.Query, "error ", err)
 		return backend.DataResponse{
 			Error: err,
 		}
 	}
-	log.DefaultLogger.Info("GetLogs ", "QueryType : ", query.QueryType)
+	d.log.Info("query GetLogs ", "resp", query.QueryType)
+	d.log.Info("query GetLogs ", "QueryType", query.QueryType)
 
 	isTimeSeries := query.QueryType == timeSeriesType
 	// create data frame response.
@@ -147,18 +145,18 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 // datasource configuration page which allows users to verify that
 // a datasource is working as expected.
 func (d *SlsDatasource) CheckHealth(_ context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
-	log.DefaultLogger.Info("CheckHealth called", "request", req)
+	d.log.Info("CheckHealth called", "request", req)
 
 	_, err := d.Client.GetLogStore(d.Settings.Project, d.Settings.LogStore)
 	if err != nil {
-		log.DefaultLogger.Info("CheckHealth failed", "error", err)
+		d.log.Info("CheckHealth failed", "error", err)
 		return &backend.CheckHealthResult{
 			Status:  backend.HealthStatusError,
 			Message: "GetLogStore error",
 		}, nil
 	}
 
-	log.DefaultLogger.Info("CheckHealth success")
+	d.log.Info("CheckHealth success")
 	return &backend.CheckHealthResult{
 		Status:  backend.HealthStatusOk,
 		Message: "Data source is working",
