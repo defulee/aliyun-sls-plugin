@@ -129,9 +129,9 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 		var valueArr []int64
 		for idx, logRecord := range logsResp.Logs {
 			d.log.Info("query resp process record", "idx", idx)
-			for k, v := range logRecord {
-				d.log.Info("query resp record kv", "key", k, "value", v)
-			}
+			//for k, v := range logRecord {
+			//	d.log.Info("query resp record kv", "key", k, "value", v)
+			//}
 			timeField := logRecord["time"]
 			valueField := logRecord["value"]
 			if len(timeField) > 0 && len(valueField) > 0 {
@@ -141,6 +141,7 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 				if te != nil || ve != nil {
 					d.log.Error("query resp time is illegal", "time", timeField, "value", valueField)
 				} else {
+					d.log.Info("query resp record kv", "time", t.UnixMilli(), "value", v)
 					timeArr = append(timeArr, t.UnixMilli())
 					valueArr = append(valueArr, v)
 				}
