@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana-starter-datasource-backend/pkg/models"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -116,13 +117,14 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 	frame := data.NewFrame(query.RefID)
 	switch payload.Format {
 	case timeSeriesType:
-		var timeArr []int64
+		var timeArr []time.Time
 		fieldValArrMap := make(map[string][]float64)
 
 		for idx, logRecord := range logsResp.Logs {
 			d.log.Info("query resp process record", "idx", idx)
-			hasErr := false
-			var timeVal int64
+			var parseErr error
+			var val float64
+			var timeVal time.Time
 			otherFieldVal := make(map[string]float64)
 			for k, v := range logRecord {
 				d.log.Info("query resp record kv", "key", k, "value", v)
@@ -130,18 +132,14 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 				if len(v) > 0 {
 					if k == "time" {
 						//时间(格式如："2018-07-11 15:07:51") to 时间戳
-						t, timeErr := time.ParseInLocation(timeFormat, v, loc)
-						if timeErr != nil {
+						timeVal, parseErr = time.ParseInLocation(timeFormat, v, loc)
+						if parseErr != nil {
 							d.log.Error("query resp time is illegal", "time", v)
-							hasErr = true
-						} else {
-							timeVal = t.UnixMilli()
 						}
-					} else {
-						val, valErr := strconv.ParseFloat(v, 64)
-						if valErr != nil {
+					} else if strings.Index(k, "__") != 0 {
+						val, parseErr = strconv.ParseFloat(v, 64)
+						if parseErr != nil {
 							d.log.Error("query resp val is not float64", "key", k, "value", v)
-							hasErr = true
 						} else {
 							otherFieldVal[k] = val
 						}
@@ -149,7 +147,7 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 				}
 			}
 
-			if !hasErr {
+			if parseErr == nil {
 				timeArr = append(timeArr, timeVal)
 				for field, val := range otherFieldVal {
 					if valArr, ok := fieldValArrMap[field]; ok {
