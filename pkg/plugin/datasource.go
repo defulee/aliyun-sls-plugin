@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"context"
-	"encoding/json"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
@@ -31,8 +30,7 @@ var (
 const timeSeriesType = "TimeSeries"
 const tableType = "table"
 
-// SlsDatasource is an example datasource which can respond to data queries, reports
-// its health and has streaming skills.
+// SlsDatasource is a datasource which can respond to data queries, reports its health.
 type SlsDatasource struct {
 	Client   *sls.Client
 	Settings *models.PluginSettings
@@ -68,6 +66,7 @@ func (d *SlsDatasource) Dispose() {
 	// Clean up datasource instance resources.
 	err := d.Client.Close()
 	if err != nil {
+		d.log.Warn("SlsDatasource Dispose close client error", err)
 		return
 	}
 }
@@ -95,21 +94,12 @@ func (d *SlsDatasource) QueryData(ctx context.Context, req *backend.QueryDataReq
 }
 
 func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
-	d.log.Info("query params: ", query.JSON)
 	response := backend.DataResponse{}
 
-	// Unmarshal the JSON into our queryModel.
-	var payload models.QueryPayload
-
-	response.Error = json.Unmarshal(query.JSON, &payload)
-	if response.Error != nil {
+	payload, err := models.ParsePayload(query)
+	if err != nil {
 		return response
 	}
-
-	payload.From = query.TimeRange.From.UnixMilli() / 1000
-	payload.To = query.TimeRange.To.UnixMilli() / 1000
-	payload.MaxDataPoints = query.MaxDataPoints
-	d.log.Info("query", "payload.Query", payload.Query, "format", payload.Format, "from", strconv.FormatInt(payload.From, 10), "to", strconv.FormatInt(payload.To, 10), "MaxDataPoints", payload.MaxDataPoints)
 
 	logsResp, err := d.Client.GetLogs(d.Settings.Project, d.Settings.LogStore, "", payload.From, payload.To, payload.Query, payload.MaxDataPoints, 0, true)
 	if err != nil {
@@ -121,37 +111,61 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 	d.log.Info("query GetLogs ", "logsCount", len(logsResp.Logs))
 
 	loc, _ := time.LoadLocation("Asia/Shanghai") //设置时区
+	timeFormat := "2006-01-02 15:04:05"
 	// create data frame response.
 	frame := data.NewFrame(query.RefID)
 	switch payload.Format {
 	case timeSeriesType:
 		var timeArr []int64
-		var valueArr []int64
+		fieldValArrMap := make(map[string][]float64)
+
 		for idx, logRecord := range logsResp.Logs {
 			d.log.Info("query resp process record", "idx", idx)
-			//for k, v := range logRecord {
-			//	d.log.Info("query resp record kv", "key", k, "value", v)
-			//}
-			timeField := logRecord["time"]
-			valueField := logRecord["value"]
-			if len(timeField) > 0 && len(valueField) > 0 {
-				//时间(格式如："2018-07-11 15:07:51") to 时间戳
-				t, te := time.ParseInLocation("2006-01-02 15:04:05", timeField, loc)
-				v, ve := strconv.ParseInt(valueField, 10, 64)
-				if te != nil || ve != nil {
-					d.log.Error("query resp time is illegal", "time", timeField, "value", valueField)
-				} else {
-					d.log.Info("query resp record kv", "time", t.UnixMilli(), "value", v)
-					timeArr = append(timeArr, t.UnixMilli())
-					valueArr = append(valueArr, v)
+			hasErr := false
+			var timeVal int64
+			otherFieldVal := make(map[string]float64)
+			for k, v := range logRecord {
+				d.log.Info("query resp record kv", "key", k, "value", v)
+
+				if len(v) > 0 {
+					if k == "time" {
+						//时间(格式如："2018-07-11 15:07:51") to 时间戳
+						t, timeErr := time.ParseInLocation(timeFormat, v, loc)
+						if timeErr != nil {
+							d.log.Error("query resp time is illegal", "time", v)
+							hasErr = true
+						} else {
+							timeVal = t.UnixMilli()
+						}
+					} else {
+						val, valErr := strconv.ParseFloat(v, 64)
+						if valErr != nil {
+							d.log.Error("query resp val is not float64", "key", k, "value", v)
+							hasErr = true
+						} else {
+							otherFieldVal[k] = val
+						}
+					}
+				}
+			}
+
+			if !hasErr {
+				timeArr = append(timeArr, timeVal)
+				for field, val := range otherFieldVal {
+					if valArr, ok := fieldValArrMap[field]; ok {
+						valArr = append(valArr, val)
+						fieldValArrMap[field] = valArr
+					} else {
+						fieldValArrMap[field] = []float64{val}
+					}
 				}
 			}
 		}
 		// add fields.
-		frame.Fields = append(frame.Fields,
-			data.NewField("time", nil, timeArr),
-			data.NewField("value", nil, valueArr),
-		)
+		frame.Fields = append(frame.Fields, data.NewField("time", nil, timeArr))
+		for field, valArr := range fieldValArrMap {
+			frame.Fields = append(frame.Fields, data.NewField(field, nil, valArr))
+		}
 	default:
 		d.log.Error("query not support format")
 	}
