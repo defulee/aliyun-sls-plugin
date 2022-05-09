@@ -1,13 +1,13 @@
 {
     "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
     "type": "datasource",
-    "name": "Aliyun SLS",
+    "name": "Aliyun SLS Datasource",
     "id": "aliyun-sls-datasource",
     "metrics": true,
     "backend": true,
     "executable": "gpx_aliyun_sls",
     "info": {
-        "description": "aliyun sls log datasource",
+        "description": "aliyun sls datasource",
         "author": {
             "name": "defu",
             "url": "https://github.com/defulee"

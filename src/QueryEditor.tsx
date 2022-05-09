@@ -38,7 +38,6 @@ export class QueryEditor extends PureComponent<Props> {
           <Label className="width-12">
             Query Text:
           </Label>
-
           <CodeEditor
             language="json"
             showLineNumbers={true}

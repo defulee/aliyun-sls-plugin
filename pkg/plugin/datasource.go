@@ -9,6 +9,8 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana-starter-datasource-backend/pkg/models"
+	"strconv"
+	"time"
 )
 
 // Make sure SlsDatasource implements required interfaces. This is important to do
@@ -26,7 +28,7 @@ var (
 	_ instancemgmt.InstanceDisposer = (*SlsDatasource)(nil)
 )
 
-const timeSeriesType = "time series"
+const timeSeriesType = "TimeSeries"
 const tableType = "table"
 
 // SlsDatasource is an example datasource which can respond to data queries, reports
@@ -107,7 +109,7 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 	payload.From = query.TimeRange.From.UnixMilli() / 1000
 	payload.To = query.TimeRange.To.UnixMilli() / 1000
 	payload.MaxDataPoints = query.MaxDataPoints
-	d.log.Info("query", "payload.Query", payload.Query, "format", payload.Format, "from", payload.From, "to", payload.To, "MaxDataPoints", payload.MaxDataPoints)
+	d.log.Info("query", "payload.Query", payload.Query, "format", payload.Format, "from", strconv.FormatInt(payload.From, 10), "to", strconv.FormatInt(payload.To, 10), "MaxDataPoints", payload.MaxDataPoints)
 
 	logsResp, err := d.Client.GetLogs(d.Settings.Project, d.Settings.LogStore, "", payload.From, payload.To, payload.Query, payload.MaxDataPoints, 0, true)
 	if err != nil {
@@ -116,22 +118,41 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 			Error: err,
 		}
 	}
-	d.log.Info("query GetLogs ", "resp", query.QueryType)
-	d.log.Info("query GetLogs ", "QueryType", query.QueryType)
+	d.log.Info("query GetLogs ", "logsCount", len(logsResp.Logs))
 
-	isTimeSeries := query.QueryType == timeSeriesType
+	loc, _ := time.LoadLocation("Asia/Shanghai") //设置时区
 	// create data frame response.
 	frame := data.NewFrame(query.RefID)
-	if isTimeSeries {
-		for _, logRecord := range logsResp.Logs {
-			// add fields.
-			frame.Fields = append(frame.Fields,
-				data.NewField("time", nil, logRecord["time"]),
-				data.NewField("value", nil, []string{logRecord["value"]}),
-			)
+	switch payload.Format {
+	case timeSeriesType:
+		var timeArr []int64
+		var valueArr []int64
+		for idx, logRecord := range logsResp.Logs {
+			d.log.Info("query resp process record", "idx", idx)
+			for k, v := range logRecord {
+				d.log.Info("query resp record kv", "key", k, "value", v)
+			}
+			timeField := logRecord["time"]
+			valueField := logRecord["value"]
+			if len(timeField) > 0 && len(valueField) > 0 {
+				//时间(格式如："2018-07-11 15:07:51") to 时间戳
+				t, te := time.ParseInLocation("2006-01-02 15:04:05", timeField, loc)
+				v, ve := strconv.ParseInt(valueField, 10, 64)
+				if te != nil || ve != nil {
+					d.log.Error("query resp time is illegal", "time", timeField, "value", valueField)
+				} else {
+					timeArr = append(timeArr, t.UnixMilli())
+					valueArr = append(valueArr, v)
+				}
+			}
 		}
-	} else {
-		// TODO 待补全
+		// add fields.
+		frame.Fields = append(frame.Fields,
+			data.NewField("time", nil, timeArr),
+			data.NewField("value", nil, valueArr),
+		)
+	default:
+		d.log.Error("query not support format")
 	}
 
 	// add the frames to the response.

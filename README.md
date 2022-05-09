@@ -10,6 +10,37 @@ Grafana supports a wide range of data sources, including Prometheus, MySQL, and 
 
 For more information about backend plugins, refer to the documentation on [Backend plugins](https://grafana.com/docs/grafana/latest/developers/plugins/backend/).
 
+## Build a data source plugin
+
+document on [Build a data source plugin](https://grafana.com/tutorials/build-a-data-source-plugin/)
+
+## Set up your environment
+Before you can get started building plugins, you need to set up your environment for plugin development.
+
+To discover plugins, Grafana scans a plugin directory, the location of which depends on your operating system.
+
+Create a directory called grafana-plugins in your preferred workspace.
+
+Find the plugins property in the Grafana configuration file and set the plugins property to the path of your grafana-plugins directory. Refer to the Grafana configuration documentation for more information.
+```markdown
+[paths]
+plugins = "/path/to/grafana-plugins"
+Restart Grafana if it’s already running, to load the new configuration.
+
+```
+
+#### Alternative method: Docker
+If you don’t want to install Grafana on your local machine, you can use Docker.
+
+To set up Grafana for plugin development using Docker, run the following command:
+```shell
+docker run -d -p 3000:3000 -e GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=aliyun-sls-datasource -v "$(pwd)"/grafana-plugins:/var/lib/grafana/plugins --name=grafana grafana/grafana:7.0.0
+```
+Since Grafana only loads plugins on start-up, you need to restart the container whenever you add or remove a plugin.
+```shell
+docker restart grafana
+```
+
 ## Getting started
 
 A data source backend plugin consists of both frontend and backend components.
