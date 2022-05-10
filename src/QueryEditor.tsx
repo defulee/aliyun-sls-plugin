@@ -47,7 +47,7 @@ export class QueryEditor extends PureComponent<Props> {
         <div style={{ width: '100%' }}>
           <Label className="width-12">Query Text:</Label>
           <CodeEditor
-            language="json"
+            language="sql"
             showLineNumbers={true}
             value={query.queryText || ''}
             width="100%"
