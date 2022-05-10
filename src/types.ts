@@ -2,16 +2,20 @@ import { DataQuery, DataSourceJsonData } from '@grafana/data';
 
 export enum Formatter {
   TimeSeries = 'TimeSeries',
-  Table = 'table',
+  Table = 'Table',
 }
 
 export interface SlsQuery extends DataQuery {
   queryText?: string;
   format?: Formatter;
+  timeField?: string;
+  timezone?: string;
 }
 
 export const defaultQuery: Partial<SlsQuery> = {
   format: Formatter.TimeSeries,
+  timeField: 'time',
+  timezone: 'Asia/Shanghai',
 };
 
 /**

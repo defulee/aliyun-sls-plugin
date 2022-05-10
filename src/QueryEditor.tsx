@@ -1,13 +1,13 @@
 import { defaults } from 'lodash';
 
-import React, { PureComponent } from 'react';
-import { Label, InlineFieldRow, InlineField, Select, CodeEditor } from '@grafana/ui';
+import React, { ChangeEvent, PureComponent } from 'react';
+import { LegacyForms, Label, InlineFieldRow, InlineField, Select, CodeEditor } from '@grafana/ui';
 
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from './datasource';
 import { defaultQuery, SlsQuery, SlsDataSourceOptions, Formatter } from './types';
 
-// const { FormField } = LegacyForms;
+const { FormField } = LegacyForms;
 
 type Props = QueryEditorProps<DataSource, SlsQuery, SlsDataSourceOptions>;
 
@@ -29,15 +29,23 @@ export class QueryEditor extends PureComponent<Props> {
     onRunQuery();
   };
 
+  onTimeFieldChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { onChange, query } = this.props;
+    onChange({ ...query, timeField: event.target.value });
+  };
+
+  onTimezoneChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { onChange, query } = this.props;
+    onChange({ ...query, timezone: event.target.value });
+  };
+
   render() {
     const query = defaults(this.props.query, defaultQuery);
 
     return (
       <>
         <div style={{ width: '100%' }}>
-          <Label className="width-12">
-            Query Text:
-          </Label>
+          <Label className="width-12">Query Text:</Label>
           <CodeEditor
             language="json"
             showLineNumbers={true}
@@ -54,6 +62,28 @@ export class QueryEditor extends PureComponent<Props> {
               <Select options={formatOptions} onChange={this.onFormatChange} value={query.format} />
             </InlineField>
           </InlineFieldRow>
+
+          {query.format === Formatter.TimeSeries && (
+            <FormField
+              labelWidth={8}
+              value={query.timeField || 'time'}
+              onChange={this.onTimeFieldChange}
+              label="TimeField"
+              tooltip="TimeField is used for time series format x-axis values. Default field name is 'time'."
+              placeholder="time field name"
+            />
+          )}
+
+          {query.format === Formatter.TimeSeries && (
+            <FormField
+              labelWidth={8}
+              value={query.timezone || 'Asia/Shanghai'}
+              onChange={this.onTimezoneChange}
+              label="Timezone"
+              tooltip="Timezone to parse time field. Default timezone is 'Asia/Shanghai'."
+              placeholder="eg. Asia/Shanghai"
+            />
+          )}
         </div>
       </>
     );

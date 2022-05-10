@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
+	"github.com/araddon/dateparse"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
@@ -29,7 +30,7 @@ var (
 )
 
 const timeSeriesType = "TimeSeries"
-const tableType = "table"
+const tableType = "Table"
 
 // SlsDatasource is a datasource which can respond to data queries, reports its health.
 type SlsDatasource struct {
@@ -111,15 +112,14 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 	}
 	d.log.Info("query GetLogs ", "logsCount", len(logsResp.Logs))
 
-	loc, _ := time.LoadLocation("Asia/Shanghai") //设置时区
-	timeFormat := "2006-01-02 15:04:05"
 	// create data frame response.
 	frame := data.NewFrame(query.RefID)
 	switch payload.Format {
 	case timeSeriesType:
 		var timeArr []time.Time
 		fieldValArrMap := make(map[string][]float64)
-
+		// 设置时区
+		loc, _ := time.LoadLocation(payload.Timezone)
 		for idx, logRecord := range logsResp.Logs {
 			d.log.Info("query resp process record", "idx", idx)
 			var parseErr error
@@ -130,11 +130,12 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 				d.log.Info("query resp record kv", "key", k, "value", v)
 
 				if len(v) > 0 {
-					if k == "time" {
-						//时间(格式如："2018-07-11 15:07:51") to 时间戳
-						timeVal, parseErr = time.ParseInLocation(timeFormat, v, loc)
+					if k == "time" || k == payload.TimeField {
+						// 时间(格式如："2018-07-11 15:07:51") to 时间戳
+						// timeVal, parseErr = time.ParseInLocation("2006-01-02 15:04:05", v, time.Local)
+						timeVal, parseErr = dateparse.ParseIn(v, loc)
 						if parseErr != nil {
-							d.log.Error("query resp time is illegal", "time", v)
+							d.log.Error("query resp time is illegal", k, v)
 						}
 					} else if strings.Index(k, "__") != 0 {
 						val, parseErr = strconv.ParseFloat(v, 64)
