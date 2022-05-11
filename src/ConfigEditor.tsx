@@ -82,8 +82,8 @@ export class ConfigEditor extends PureComponent<Props, State> {
         <div className="gf-form">
           <FormField
             label="AccessKeyID"
-            labelWidth={6}
-            inputWidth={20}
+            labelWidth={8}
+            inputWidth={30}
             onChange={this.onAccessKeyIdChange}
             value={jsonData.accessKeyId || ''}
             placeholder="your ak id"
@@ -97,8 +97,8 @@ export class ConfigEditor extends PureComponent<Props, State> {
               value={secureJsonData.accessKeySecret || ''}
               label="AccessKeySecret"
               placeholder="your ak secret"
-              labelWidth={6}
-              inputWidth={20}
+              labelWidth={8}
+              inputWidth={30}
               onReset={this.onResetAccessKeySecret}
               onChange={this.onAccessKeySecretChange}
             />
@@ -108,8 +108,8 @@ export class ConfigEditor extends PureComponent<Props, State> {
         <div className="gf-form">
           <FormField
             label="Endpoint"
-            labelWidth={6}
-            inputWidth={20}
+            labelWidth={8}
+            inputWidth={30}
             onChange={this.onEndpointChange}
             value={jsonData.endpoint || ''}
             placeholder="your endpoint"
@@ -119,8 +119,8 @@ export class ConfigEditor extends PureComponent<Props, State> {
         <div className="gf-form">
           <FormField
             label="Project"
-            labelWidth={6}
-            inputWidth={20}
+            labelWidth={8}
+            inputWidth={30}
             onChange={this.onProjectChange}
             value={jsonData.project || ''}
             placeholder="your project name"
@@ -130,8 +130,8 @@ export class ConfigEditor extends PureComponent<Props, State> {
         <div className="gf-form">
           <FormField
             label="LogStore"
-            labelWidth={6}
-            inputWidth={20}
+            labelWidth={8}
+            inputWidth={30}
             onChange={this.onLogStoreChange}
             value={jsonData.logStore || ''}
             placeholder="your LogStore name"
