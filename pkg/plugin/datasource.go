@@ -167,7 +167,6 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 	sort.Slice(dataRecords, func(i, j int) bool {
 		return dataRecords[i].Time.Before(dataRecords[j].Time)
 	})
-
 	var timeArr []time.Time
 	fieldValArrMap := make(map[string][]float64)
 	for _, record := range dataRecords {
