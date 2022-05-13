@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana-starter-datasource-backend/pkg/models"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -128,10 +129,10 @@ func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, que
 }
 
 func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.GetLogsResponse, frame *data.Frame, formatTime bool) {
-	var timeArr []time.Time
-	fieldValArrMap := make(map[string][]float64)
 	// 设置时区
 	loc, _ := time.LoadLocation(payload.Timezone)
+
+	var dataRecords []models.DataRecord
 	for _, logRecord := range logsResp.Logs {
 		var parseErr error
 		var val float64
@@ -158,17 +159,29 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 		}
 
 		if parseErr == nil {
-			timeArr = append(timeArr, timeVal)
-			for field, val := range otherFieldVal {
-				if valArr, ok := fieldValArrMap[field]; ok {
-					valArr = append(valArr, val)
-					fieldValArrMap[field] = valArr
-				} else {
-					fieldValArrMap[field] = []float64{val}
-				}
+			dataRecords = append(dataRecords, models.DataRecord{Time: timeVal, Values: otherFieldVal})
+		}
+	}
+
+	// sort record by time field
+	sort.Slice(dataRecords, func(i, j int) bool {
+		return dataRecords[i].Time.Before(dataRecords[j].Time)
+	})
+
+	var timeArr []time.Time
+	fieldValArrMap := make(map[string][]float64)
+	for _, record := range dataRecords {
+		timeArr = append(timeArr, record.Time)
+		for field, val := range record.Values {
+			if valArr, ok := fieldValArrMap[field]; ok {
+				valArr = append(valArr, val)
+				fieldValArrMap[field] = valArr
+			} else {
+				fieldValArrMap[field] = []float64{val}
 			}
 		}
 	}
+
 	// add fields.
 	frame.Fields = append(frame.Fields, data.NewField("time", nil, timeArr))
 	for field, valArr := range fieldValArrMap {
