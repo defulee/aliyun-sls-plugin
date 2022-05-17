@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
-	"github.com/araddon/dateparse"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
@@ -86,7 +85,7 @@ func (d *SlsDatasource) QueryData(ctx context.Context, req *backend.QueryDataReq
 
 	// loop over queries and execute them individually.
 	for _, q := range req.Queries {
-		res := d.query(ctx, req.PluginContext, q)
+		res := d.query(ctx, q)
 
 		// save the response in a hashmap
 		// based on with RefID as identifier
@@ -96,11 +95,11 @@ func (d *SlsDatasource) QueryData(ctx context.Context, req *backend.QueryDataReq
 	return response, nil
 }
 
-func (d *SlsDatasource) query(_ context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+func (d *SlsDatasource) query(_ context.Context, query backend.DataQuery) backend.DataResponse {
 	response := backend.DataResponse{}
 
 	payload, err := models.ParsePayload(query)
-	if err != nil {
+	if err != nil || payload.Hide {
 		return response
 	}
 
@@ -142,8 +141,8 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 			if len(v) > 0 {
 				if formatTime && k == payload.TimeField {
 					// 时间(格式如："2018-07-11 15:07:51") to 时间戳
-					// timeVal, parseErr = time.ParseInLocation("2006-01-02 15:04:05", v, time.Local)
-					timeVal, parseErr = dateparse.ParseIn(v, loc)
+					timeVal, parseErr = time.ParseInLocation(payload.TimeFormat, v, loc)
+					// timeVal, parseErr = dateparse.ParseIn(v, loc)
 					if parseErr != nil {
 						d.log.Error("SlsDatasource#formatData time is illegal", k, v)
 					}

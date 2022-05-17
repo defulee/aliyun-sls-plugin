@@ -10,12 +10,14 @@ export interface SlsQuery extends DataQuery {
   format?: Formatter;
   timeField?: string;
   timezone?: string;
+  timeFormat?: string;
 }
 
 export const defaultQuery: Partial<SlsQuery> = {
   format: Formatter.TimeSeries,
   timeField: 'time',
   timezone: 'Asia/Shanghai',
+  timeFormat: 'yyyy-MM-dd HH:mm:ss',
 };
 
 /**

@@ -39,6 +39,11 @@ export class QueryEditor extends PureComponent<Props> {
     onChange({ ...query, timezone: event.target.value });
   };
 
+  onTimeFormatChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { onChange, query } = this.props;
+    onChange({ ...query, timeFormat: event.target.value });
+  };
+
   render() {
     const query = defaults(this.props.query, defaultQuery);
 
@@ -82,6 +87,17 @@ export class QueryEditor extends PureComponent<Props> {
               label="Timezone"
               tooltip="Timezone to parse time field. Default timezone is 'Asia/Shanghai'."
               placeholder="eg. Asia/Shanghai"
+            />
+          )}
+
+          {query.format === Formatter.TimeSeries && (
+            <FormField
+              labelWidth={8}
+              value={query.timeFormat || 'yyyy-MM-dd HH:mm:ss'}
+              onChange={this.onTimeFormatChange}
+              label="TimeFormat"
+              tooltip="TimeFormat to parse time field. Default timeFormat is 'yyyy-MM-dd HH:mm:ss'."
+              placeholder="eg. yyyy-MM-dd HH:mm:ss"
             />
           )}
         </div>
