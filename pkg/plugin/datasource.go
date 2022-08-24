@@ -2,16 +2,17 @@ package plugin
 
 import (
 	"context"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana-starter-datasource-backend/pkg/models"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // Make sure SlsDatasource implements required interfaces. This is important to do
@@ -133,11 +134,13 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 
 	var dataRecords []models.DataRecord
 	for _, logRecord := range logsResp.Logs {
+		d.log.Info("SlsDatasource#formatData record:", logRecord)
 		var parseErr error
-		var val float64
 		var timeVal time.Time
-		otherFieldVal := make(map[string]float64)
+		fieldNumberValDict := make(map[string]float64)
+		fieldStringValDict := make(map[string]string)
 		for k, v := range logRecord {
+			d.log.Info("SlsDatasource#formatData record:", k, v)
 			if len(v) > 0 {
 				if formatTime && k == payload.TimeField {
 					// 时间(格式如："2018-07-11 15:07:51") to 时间戳
@@ -147,45 +150,70 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 						d.log.Error("SlsDatasource#formatData time is illegal", k, v)
 					}
 				} else if strings.Index(k, "__") != 0 {
-					val, parseErr = strconv.ParseFloat(v, 64)
+					var val, parseErr = strconv.ParseFloat(v, 64)
 					if parseErr != nil {
-						d.log.Error("SlsDatasource#formatData val is not float64", "key", k, "value", v)
+						fieldStringValDict[k] = v
 					} else {
-						otherFieldVal[k] = val
+						fieldNumberValDict[k] = val
 					}
 				}
 			}
 		}
 
 		if parseErr == nil {
-			dataRecords = append(dataRecords, models.DataRecord{Time: timeVal, Values: otherFieldVal})
+			dataRecords = append(dataRecords, models.DataRecord{Time: timeVal, FieldNumberValDict: fieldNumberValDict, FieldStringValDict: fieldStringValDict})
 		}
 	}
 
+	d.log.Info("SlsDatasource#formatData sort records")
 	// sort record by time field
 	sort.Slice(dataRecords, func(i, j int) bool {
 		return dataRecords[i].Time.Before(dataRecords[j].Time)
 	})
+
+	d.log.Info("SlsDatasource#formatData reformat data")
 	var timeArr []time.Time
-	fieldValArrMap := make(map[string][]float64)
+	fieldNumberValArrMap := make(map[string][]float64)
+	fieldStringValArrMap := make(map[string][]string)
 	for _, record := range dataRecords {
 		timeArr = append(timeArr, record.Time)
-		for field, val := range record.Values {
-			if valArr, ok := fieldValArrMap[field]; ok {
-				valArr = append(valArr, val)
-				fieldValArrMap[field] = valArr
-			} else {
-				fieldValArrMap[field] = []float64{val}
+		if len(record.FieldNumberValDict) > 0 {
+			for field, val := range record.FieldNumberValDict {
+				if _, ok := fieldNumberValArrMap[field]; !ok {
+					fieldNumberValArrMap[field] = []float64{}
+				}
+				fieldNumberValArrMap[field] = append(fieldNumberValArrMap[field], val)
+			}
+
+		if len(record.FieldStringValDict) > 0 {
+			for field, val := range record.FieldStringValDict {
+				if _, ok := fieldStringValArrMap[field]; !ok {
+					fieldStringValArrMap[field] = []string{}
+				}
+				fieldStringValArrMap[field] = append(fieldStringValArrMap[field], val)
 			}
 		}
 	}
 
+	d.log.Info("SlsDatasource#formatData add time field to frame")
 	// add fields.
 	frame.Fields = append(frame.Fields, data.NewField("time", nil, timeArr))
-	for field, valArr := range fieldValArrMap {
+
+	d.log.Info("SlsDatasource#formatData add number field to frame")
+	for field, valArr := range fieldNumberValArrMap {
+		d.log.Info("SlsDatasource#formatData add field to frame, field:", field)
+		d.log.Info("SlsDatasource#formatData add field to frame, values:", valArr)
 		frame.Fields = append(frame.Fields, data.NewField(field, nil, valArr))
 	}
 
+	d.log.Info("SlsDatasource#formatData add string field to frame")
+	for field, valArr := range fieldStringValArrMap {
+		d.log.Info("SlsDatasource#formatData add field to frame, field:", field)
+		d.log.Info("SlsDatasource#formatData add field to frame, values:", valArr)
+		frame.Fields = append(frame.Fields, data.NewField(field, nil, valArr))
+	}
+
+	d.log.Info("SlsDatasource#formatData set meta")
 	frame.SetMeta(&data.FrameMeta{})
 	frame.Meta.Type = data.FrameTypeTimeSeriesWide
 }
