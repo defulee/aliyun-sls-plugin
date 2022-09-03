@@ -5,7 +5,7 @@ import (
 )
 
 type DataRecord struct {
-	Time               time.Time
-	FieldNumberValDict map[string]*float64
-	FieldValDict       map[string]string
+	Time         time.Time
+	Number       *float64
+	FieldValDict map[string]string
 }

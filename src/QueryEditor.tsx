@@ -44,6 +44,11 @@ export class QueryEditor extends PureComponent<Props> {
     onChange({ ...query, timeFormat: event.target.value });
   };
 
+  onNumberFieldChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { onChange, query } = this.props;
+    onChange({ ...query, numberField: event.target.value });
+  };
+
   render() {
     const query = defaults(this.props.query, defaultQuery);
 
@@ -63,7 +68,7 @@ export class QueryEditor extends PureComponent<Props> {
         <br />
         <div className="gf-form">
           <InlineFieldRow>
-            <InlineField label="Format" grow>
+            <InlineField label="Format" labelWidth={8}>
               <Select options={formatOptions} onChange={this.onFormatChange} value={query.format} />
             </InlineField>
           </InlineFieldRow>
@@ -100,6 +105,15 @@ export class QueryEditor extends PureComponent<Props> {
               placeholder="eg. yyyy-MM-dd HH:mm:ss"
             />
           )}
+
+          <FormField
+            labelWidth={8}
+            value={query.numberField || 'qpm'}
+            onChange={this.onTimeFieldChange}
+            label="NumberField"
+            tooltip="NumberField is used for time series format y-axis value. Default field name is 'qpm'."
+            placeholder="number field name"
+          />
         </div>
       </>
     );

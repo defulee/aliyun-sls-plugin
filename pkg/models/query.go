@@ -2,10 +2,11 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"strconv"
 	"strings"
+
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 type QueryPayload struct {
@@ -14,6 +15,7 @@ type QueryPayload struct {
 	TimeField     string `json:"timeField"`
 	Timezone      string `json:"timezone"`
 	TimeFormat    string `json:"timeFormat"`
+	NumberField   string `json:"numberField"`
 	From          int64  `json:"from"`
 	To            int64  `json:"to"`
 	MaxDataPoints int64  `json:"maxDataPoints,omitempty"`
@@ -52,11 +54,14 @@ func ParsePayload(query backend.DataQuery) (*QueryPayload, error) {
 		payload.TimeFormat = strings.ReplaceAll(payload.TimeFormat, "mm", "04")
 		payload.TimeFormat = strings.ReplaceAll(payload.TimeFormat, "ss", "05")
 	}
+	if len(payload.NumberField) == 0 {
+		payload.NumberField = "qpm"
+	}
 
 	log.DefaultLogger.Info("ParsePayload", "Query", payload.Query, "Format", payload.Format,
 		"TimeField", payload.TimeField, "Timezone", payload.Timezone, "TimeFormat", payload.TimeFormat,
-		"From", strconv.FormatInt(payload.From, 10), "To", strconv.FormatInt(payload.To, 10),
-		"MaxDataPoints", payload.MaxDataPoints, "Hide", payload.Hide)
+		"NumberFormat", payload.NumberField, "MaxDataPoints", payload.MaxDataPoints, "Hide", payload.Hide,
+		"From", strconv.FormatInt(payload.From, 10), "To", strconv.FormatInt(payload.To, 10))
 
 	return &payload, nil
 }

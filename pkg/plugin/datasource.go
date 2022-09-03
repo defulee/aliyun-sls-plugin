@@ -117,7 +117,7 @@ func (d *SlsDatasource) query(_ context.Context, query backend.DataQuery) backen
 	frame := data.NewFrame(query.RefID)
 	switch payload.Format {
 	case timeSeriesType, tableType:
-		d.formatData(payload, logsResp, frame, len(payload.TimeFormat) > 0)
+		d.formatData(payload, logsResp, frame, payload.Format == timeSeriesType)
 	default:
 		d.log.Error("SlsDatasource#query not support format")
 	}
@@ -133,7 +133,7 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 	loc, _ := time.LoadLocation(payload.Timezone)
 
 	// 时间(格式如："2018-07-11 15:07:51") to 时间戳
-	dataRecords, fieldArr := d.parseDateRecord(logsResp, formatTime, payload, loc)
+	dataRecords := d.parseDateRecord(logsResp, formatTime, payload, loc)
 
 	if formatTime {
 		// sort record by time field
@@ -149,35 +149,43 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 		if len(timeArr) > 0 {
 			d.log.Info("SlsDatasource#formatData add time field to frame")
 			// add fields.
+			d.log.Info("SlsDatasource#processNumberField", "timeArr", timeArr)
 			frame.Fields = append(frame.Fields, data.NewField("time", nil, timeArr))
 		}
-	}
 
-	if payload.Format == timeSeriesType {
 		// 解析数据字段
-		numberFieldMap := d.parseNumberFields(fieldArr, dataRecords)
+		metricMap := d.parseMetric(dataRecords)
 
 		// 处理数据字段
-		metricFieldMap, numberRecords := d.processNumberField(dataRecords, numberFieldMap)
-
-		d.log.Info("SlsDatasource#formatData convert row to col")
-		for metricField, _ := range metricFieldMap {
-			d.log.Info("SlsDatasource#formatData", "numberField", metricField)
-			var numberArr = make([]*float64, len(numberRecords))
-			for _, record := range numberRecords {
-				d.log.Info("SlsDatasource#formatData numberField", "record", record)
-				var number *float64 = nil
-				for field, val := range record {
-					if field == metricField {
-						number = val
-					}
+		d.log.Info("SlsDatasource#processNumberField")
+		for metric, _ := range metricMap {
+			var numberArr = make([]*float64, 0)
+			for _, record := range dataRecords {
+				var metricPrefix string = ""
+				for _, value := range record.FieldValDict {
+					metricPrefix = metricPrefix + value + "#"
 				}
-				numberArr = append(numberArr, number)
+
+				if metricPrefix == metric {
+					numberArr = append(numberArr, record.Number)
+				} else {
+					numberArr = append(numberArr, nil)
+				}
 			}
-			frame.Fields = append(frame.Fields, data.NewField(metricField, nil, numberArr))
+			d.log.Info("SlsDatasource#processNumberField", "numberArr", numberArr)
+
+			frame.Fields = append(frame.Fields, data.NewField(metric+payload.NumberField, nil, numberArr))
 		}
+
 	} else {
-		for _, strfield := range fieldArr {
+		metricMap := make(map[string]string)
+		for _, record := range dataRecords {
+			for field, _ := range record.FieldValDict {
+				metricMap[field] = "1"
+			}
+		}
+
+		for strfield, _ := range metricMap {
 			var valArr []string
 			for _, record := range dataRecords {
 				var value = ""
@@ -195,13 +203,13 @@ func (d *SlsDatasource) formatData(payload *models.QueryPayload, logsResp *sls.G
 }
 
 // 从日志记录解析数据记录
-func (d *SlsDatasource) parseDateRecord(logsResp *sls.GetLogsResponse, formatTime bool, payload *models.QueryPayload, loc *time.Location) ([]models.DataRecord, []string) {
+func (d *SlsDatasource) parseDateRecord(logsResp *sls.GetLogsResponse, formatTime bool, payload *models.QueryPayload, loc *time.Location) []models.DataRecord {
 	var dataRecords []models.DataRecord
-	fieldDict := make(map[string]string)
 	for _, logRecord := range logsResp.Logs {
 		d.log.Info("SlsDatasource#formatData logRecord:", logRecord)
 		var parseErr error
 		var timeVal time.Time
+		var numberVal *float64 = nil
 		fieldStringValDict := make(map[string]string)
 		for k, v := range logRecord {
 			d.log.Info("SlsDatasource#formatData", "k", k, "v", v)
@@ -212,6 +220,13 @@ func (d *SlsDatasource) parseDateRecord(logsResp *sls.GetLogsResponse, formatTim
 					if parseErr != nil {
 						d.log.Error("SlsDatasource#formatData time is illegal", k, v)
 					}
+				} else if formatTime && k == payload.NumberField {
+					number, parseErr := strconv.ParseFloat(v, 64)
+					if parseErr != nil {
+						d.log.Error("SlsDatasource#formatData number is illegal", k, v)
+					} else {
+						numberVal = &number
+					}
 				} else if strings.Index(k, "__") != 0 {
 					fieldStringValDict[k] = v
 				}
@@ -219,80 +234,25 @@ func (d *SlsDatasource) parseDateRecord(logsResp *sls.GetLogsResponse, formatTim
 		}
 
 		if parseErr == nil {
-			for field, _ := range fieldStringValDict {
-				fieldDict[field] = "1"
-			}
-			dataRecords = append(dataRecords, models.DataRecord{Time: timeVal, FieldValDict: fieldStringValDict})
+			dataRecords = append(dataRecords, models.DataRecord{Time: timeVal, Number: numberVal, FieldValDict: fieldStringValDict})
 		}
 	}
 
-	var fieldArr []string
-	for field, _ := range fieldDict {
-		fieldArr = append(fieldArr, field)
-	}
-
-	return dataRecords, fieldArr
+	return dataRecords
 }
 
-// 添加时间字段
-func (d *SlsDatasource) AddTimeFieldToFrame(dataRecords *[]models.DataRecord, frame *data.Frame) {
-	d.log.Info("SlsDatasource#formatData sort records")
-
-}
-
-func (d *SlsDatasource) processNumberField(dataRecords []models.DataRecord, numberFieldMap map[string]string) (map[string]string, []map[string]*float64) {
-	d.log.Info("SlsDatasource#processNumberField")
-	fieldDict := make(map[string]string)
-	numberRecords := make([]map[string]*float64, len(dataRecords))
-	for _, record := range dataRecords {
-		var metricPrefix string = ""
-		for field, value := range record.FieldValDict {
-			if _, ok := numberFieldMap[field]; !ok {
-				metricPrefix = metricPrefix + value + "#"
-			}
-		}
-		d.log.Info("SlsDatasource#processNumberField", "metricPrefix", metricPrefix)
-
-		fieldNumberValDict := make(map[string]*float64)
-		for field, val := range record.FieldValDict {
-			if _, ok := numberFieldMap[field]; ok {
-				metric := metricPrefix + field
-				d.log.Info("SlsDatasource#processNumberField", "metric", metric)
-				number, parseErr := strconv.ParseFloat(val, 64)
-				d.log.Info("SlsDatasource#processNumberField ParseFloat", "val", val, "number", number)
-				if parseErr != nil {
-					d.log.Info("SlsDatasource#processNumberField number is nil")
-					fieldNumberValDict[metric] = nil
-				} else {
-					d.log.Info("SlsDatasource#processNumberField", "number", number)
-					fieldNumberValDict[metric] = &number
-				}
-				fieldDict[metric] = "1"
-				numberRecords = append(numberRecords, fieldNumberValDict)
-			}
-		}
-	}
-	return fieldDict, numberRecords
-}
-
-func (d *SlsDatasource) parseNumberFields(fieldArr []string, dataRecords []models.DataRecord) map[string]string {
+func (d *SlsDatasource) parseMetric(dataRecords []models.DataRecord) map[string]string {
 	d.log.Info("SlsDatasource#parseNumberFields")
-	var numberFieldMap = make(map[string]string)
-	for _, field := range fieldArr {
-		var isNumber = true
-		for _, record := range dataRecords {
-			if val, ok := record.FieldValDict[field]; ok {
-				_, parseErr := strconv.ParseFloat(val, 64)
-				if parseErr != nil {
-					isNumber = false
-				}
-			}
+	metricMap := make(map[string]string)
+	for _, record := range dataRecords {
+		var metric string = ""
+		for _, value := range record.FieldValDict {
+			metric = metric + value + "#"
 		}
-		if isNumber {
-			numberFieldMap[field] = "1"
-		}
+		metricMap[metric] = "1"
 	}
-	return numberFieldMap
+
+	return metricMap
 }
 
 // CheckHealth handles health checks sent from Grafana to the plugin.

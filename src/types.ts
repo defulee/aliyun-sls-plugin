@@ -9,6 +9,7 @@ export interface SlsQuery extends DataQuery {
   queryText?: string;
   format?: Formatter;
   timeField?: string;
+  numberField?: string;
   timezone?: string;
   timeFormat?: string;
 }
@@ -16,6 +17,7 @@ export interface SlsQuery extends DataQuery {
 export const defaultQuery: Partial<SlsQuery> = {
   format: Formatter.TimeSeries,
   timeField: 'time',
+  numberField: 'qpm',
   timezone: 'Asia/Shanghai',
   timeFormat: 'yyyy-MM-dd HH:mm:ss',
 };
